@@ -168,19 +168,26 @@ constructor(
 
     taskRemovedBehavior = Convert.taskRemovedBehaviorDtoToTaskRemovedBehavior(behavior)
 
-    // Align API behavior with iOS:
-    // If the terms haven't yet been accepted throw an error.
-    if (!areTermsAccepted()) {
-      callback(
-        Result.failure(
-          FlutterError(
-            "termsNotAccepted",
-            "The session initialization failed, because the user has not yet accepted the navigation terms and conditions.",
-          )
-        )
-      )
-      return
-    }
+    // NOTE (fork): the pre-check that used to stand here has been REMOVED.
+    //
+    // It read `if (!areTermsAccepted()) { fail("termsNotAccepted"); return }`,
+    // to align this platform's behaviour with iOS. On Android 16 that is a
+    // guard built on a broken signal: `NavigationApi.areTermsAccepted()`
+    // returns false even immediately after the user has accepted the dialog,
+    // so `showTermsAndConditionsDialog()` returns true (that boolean comes
+    // straight from the native OnTermsResponseListener, so the SDK did record
+    // the acceptance) and session initialization is then refused anyway. See
+    // googlemaps/flutter-navigation-sdk#757.
+    //
+    // Removing it loses no safety, because it was never the authoritative
+    // gate. `NavigationApi.getNavigator()` below performs its own check and
+    // reports ErrorCode.TERMS_NOT_ACCEPTED, which
+    // `convertNavigatorErrorToFlutterError` already maps to the SAME
+    // "termsNotAccepted" FlutterError. A genuinely un-accepted user therefore
+    // still fails, with the same code, from the SDK itself rather than from a
+    // getter that is currently misreporting.
+    //
+    // Revert this fork once #757 is fixed upstream.
 
     try {
       initializeForegroundServiceManager(notificationOptions)
